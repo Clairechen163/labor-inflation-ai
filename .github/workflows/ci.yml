@@ -1,0 +1,21 @@
+name: CI
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 12 5 * *"   # monthly smoke test of the live FRED fetch
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+      - name: Live fetch smoke test
+        if: github.event_name == 'schedule'
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python -m src.fetch
