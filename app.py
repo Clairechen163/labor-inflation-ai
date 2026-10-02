@@ -37,7 +37,7 @@ with tabs[0]:
 with tabs[1]:
     st.plotly_chart(charts.real_wages(view), use_container_width=True)
 with tabs[2]:
-    st.plotly_chart(charts.adp_vs_bls(view), use_container_width=True)
+    st.plotly_chart(charts.adp_vs_bls(view[view.index >= "2022-01-01"]), use_container_width=True)
     st.markdown("ADP and BLS often diverge; treat ADP as a preview, not the final word.")
 with tabs[3]:
     st.plotly_chart(charts.policy_vs_inflation(view), use_container_width=True)
