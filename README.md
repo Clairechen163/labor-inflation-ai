@@ -1,5 +1,7 @@
 [![CI](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml)
 
+# US Labor, Inflation & AI
+
 **Live app:** [https://labor-inflation-ai.streamlit.app](https://labor-inflation-ai.streamlit.app)
 
 An interactive dashboard asking: **is wage growth driving US inflation, and is there early evidence that AI is affecting hiring?**
