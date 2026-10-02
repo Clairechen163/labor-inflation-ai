@@ -1,4 +1,4 @@
-# [![CI]([https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml)](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml))
+# ![CI]([https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml/badge.svg?branch=main)[](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml)](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml/badge.svg?branch=main)]([https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml)))
 
 # US Labor, Inflation & AI
 
@@ -7,6 +7,8 @@ An interactive dashboard asking: **is wage growth driving US inflation, and is t
 Data comes from the [FRED API](https://fred.stlouisfed.org/docs/api/) (St. Louis Fed), refreshed daily in the app.
 
 > Add a screenshot here: `docs/dashboard.png`
+
+
 
 ## Key findings (as of September 2026)
 
@@ -70,6 +72,8 @@ tests/            pytest checks on the calculations
 - The youth-unemployment gap has many causes and does not isolate AI. Treat it as a signal to watch.
 - Wage series here is average hourly earnings, which differs from ADP's base pay measure.
 - Verify each FRED series ID (in `src/fetch.py`) before trusting a chart.
+
+ - Some CPI observations are missing around late 2025 because the source agency did not publish them (see FRED for details). Charts show a gap or a straight line across that period, and year-over-year figures that depend on the missing month may be unavailable.
 
 
 

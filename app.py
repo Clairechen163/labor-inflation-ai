@@ -17,7 +17,10 @@ def load(key: str) -> pd.DataFrame:
     return derive(build_dataset(api_key=key))
 
 
-key = st.secrets.get("FRED_API_KEY", None) if hasattr(st, "secrets") else None
+try:
+    key = st.secrets["FRED_API_KEY"]
+except Exception:
+    key = None
 key = key or os.environ.get("FRED_API_KEY")
 if not key:
     st.error("Set FRED_API_KEY as an environment variable or Streamlit secret.")
