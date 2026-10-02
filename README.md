@@ -1,10 +1,10 @@
-[![CI](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml)
+[![CI](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Clairechen163/labor-inflation-ai/actions/workflows/ci.yml) [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://labor-inflation-ai.streamlit.app)
 
 # US Labor, Inflation & AI
 
-**Live app:** [https://labor-inflation-ai.streamlit.app](https://labor-inflation-ai.streamlit.app)
+**Live app:** https://labor-inflation-ai.streamlit.app
 
-An interactive dashboard asking: **is wage growth driving US inflation, and is there early evidence that AI is affecting hiring?**
+Tests whether wage growth is driving US inflation and whether AI shows up in hiring data. **Finding:** inflation is energy-led, and the AI evidence is inconclusive.
 
 Data comes from the [FRED API](https://fred.stlouisfed.org/docs/api/) (St. Louis Fed), refreshed daily in the app.
 
@@ -12,18 +12,10 @@ Data comes from the [FRED API](https://fred.stlouisfed.org/docs/api/) (St. Louis
 
 ## Key findings (as of September 2026)
 
-1. **Inflation is energy-led, not wage-led.** August CPI was 3.4% YoY with energy up 16.3%, while average hourly earnings grew about 3.1%, leaving real wages slightly negative (about -0.3%).
-2. **CPI and PCE gap narrowed.** August headline PCE (3.4%) matched headline CPI (3.4%). Core PCE (3.0%) still ran above core CPI (2.4%). Different weights may explain part of this; see Methods.
-3. **The Fed is tightening because of inflation, not weak labor demand.** It raised rates to 3.75-4.00% on Sept 16. The unemployment rate was 4.1% in August, and ADP private payrolls rebounded to +90,000 in September after a revised +36,000 in August. Hiring is slower than before 2025, but the Fed describes the labor market as stable.
-4. **AI evidence is inconclusive.** Aggregate unemployment shows no clear AI effect. Unemployment for ages 20-24 rose relative to the overall rate during 2024-2025 but has since narrowed to roughly its 2019 level, so this chart alone doesn't show lasting AI displacement.
-
-## What changed this month (September 30 release)
-
-- **August PCE:** headline +0.3% m/m and 3.4% YoY (July: 3.7%); core +0.2% m/m and 3.0% YoY (July: 3.3%). Core came in below the ~3.4% forecast.
-- **ADP (Sept 30):** private payrolls +90,000 in September (August revised to +36,000). Base pay +3.2% YoY.
-- **Real disposable income was flat (0.0%)** even as spending rose 0.9%, so consumers are spending faster than income is growing.
-- The release included BEA's annual update, which can revise earlier months.
-- Source: BEA, Personal Income and Outlays, August 2026.
+1. **Inflation is energy-led, not wage-led.** August CPI was 3.4% with energy up 16.3%; average hourly earnings grew about 3.1%, so real wages are slightly negative (about -0.3%).
+2. **CPI and PCE gap narrowed.** Headline PCE and CPI were both 3.4% in August, but core PCE (3.0%) still exceeds core CPI (2.4%).
+3. **The Fed is tightening because of inflation, not weak labor demand.** It raised rates to 3.75-4.00% on Sept 16 with unemployment at 4.1% in August.
+4. **AI evidence is inconclusive.** Unemployment for ages 20-24 rose relative to the overall rate in 2024-2025 but has since narrowed to roughly its 2019 level.
 
 ## Run it
 
@@ -50,6 +42,7 @@ tests/            pytest checks on the calculations
 pytest.ini        pytest import-path config
 docs/             dashboard screenshot
 .github/          CI + monthly live-fetch smoke test
+LICENSE           MIT license
 ```
 
 ## Methods
@@ -69,6 +62,30 @@ docs/             dashboard screenshot
 - The 20-24 unemployment rate counts only people actively looking for work, and includes recent graduates and students entering the labor force. It does not measure hiring in AI-exposed occupations, which is where studies looking for AI effects focus (for example, Stanford's analysis of payroll data by occupation).
 - Average hourly earnings jumped in spring 2020 because job losses were concentrated among low-wage workers, not because individual wages rose. Real wage growth here is a simple percentage-point difference (wage growth minus inflation), an approximation.
 
+## Roadmap
+
+- Add occupation-level AI-exposure and entry-level job postings data, since youth unemployment is only a rough proxy.
+- Offer a downloadable CSV of the derived series from the app.
+- Automate the monthly refresh of the findings above after each CPI, PCE and jobs release.
+
+<details>
+<summary><strong>What changed this month (September 30 release)</strong></summary>
+
+- **August PCE:** headline +0.3% m/m and 3.4% YoY (July: 3.7%); core +0.2% m/m and 3.0% YoY (July: 3.3%). Core came in below the ~3.4% forecast.
+- **ADP (Sept 30):** private payrolls +90,000 in September (August revised to +36,000). Base pay +3.2% YoY.
+- **Real disposable income was flat (0.0%)** even as spending rose 0.9%, so consumers are spending faster than income is growing.
+- The release included BEA's annual update, which can revise earlier months.
+- Source: BEA, Personal Income and Outlays, August 2026.
+
+</details>
+
+## Sources
+
+- FRED, Federal Reserve Bank of St. Louis (series IDs in `src/fetch.py`)
+- U.S. Bureau of Labor Statistics: CPI and Employment Situation reports
+- U.S. Bureau of Economic Analysis: Personal Income and Outlays (PCE)
+- ADP National Employment Report
+
 ## Data and licensing
 
-Data via FRED; ADP data is copyrighted by ADP and cited here through FRED. Raw data files are not committed to this repository.
+Code is released under the MIT License (see `LICENSE`). Data via FRED; ADP data is copyrighted by ADP and cited here through FRED. Raw data files are not committed to this repository.
