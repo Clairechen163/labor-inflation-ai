@@ -6,7 +6,7 @@ def _line(df, cols, labels, title, ytitle):
     fig = go.Figure()
     for c, lab in zip(cols, labels):
         if c in df:
-            fig.add_scatter(x=df.index, y=df[c], name=lab, mode="lines")
+            fig.add_scatter(x=df.index, y=df[c], name=lab, mode="lines", connectgaps=False)
     fig.update_layout(title=title, yaxis_title=ytitle, hovermode="x unified",
                       legend=dict(orientation="h", y=-0.2))
     return fig
@@ -48,3 +48,16 @@ def youth_gap(df):
     return _line(df, ["unrate_20_24", "unrate", "youth_gap"],
                  ["Unemployment, ages 20-24", "Overall unemployment", "Gap (pp)"],
                  "Young-worker unemployment vs overall (suggestive only)", "%")
+
+
+def backtest_chart(preds, horizon):
+    """Actual vs forecast core-PCE inflation (annualized %, next `horizon` months)."""
+    fig = go.Figure()
+    fig.add_scatter(x=preds.index, y=preds["actual"], name="Actual",
+                    mode="lines", line=dict(color="black", width=3))
+    for col in preds.columns.drop("actual"):
+        fig.add_scatter(x=preds.index, y=preds[col], name=col, mode="lines")
+    fig.update_layout(
+        title=f"Walk-forward forecasts of core PCE inflation, next {horizon} months (annualized %)",
+        yaxis_title="%", hovermode="x unified", legend=dict(orientation="h", y=-0.3))
+    return fig
