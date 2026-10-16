@@ -1,0 +1,34 @@
+name: Refresh dashboard image
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"     # Mondays 06:00 UTC; commits only if new data changed the image
+  workflow_dispatch:         # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt matplotlib
+      - name: Regenerate image from live FRED data
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python -m scripts.make_dashboard_image
+      - name: Commit if changed
+        run: |
+          git config user.name "Clairechen163"
+          git config user.email "Clairechen163@users.noreply.github.com"
+          if git diff --quiet -- docs/dashboard.png; then
+            echo "No new data; image unchanged."
+          else
+            git add docs/dashboard.png
+            git commit -m "Refresh dashboard image"
+            git push
+          fi

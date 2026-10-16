@@ -10,6 +10,8 @@ Data comes from the [FRED API](https://fred.stlouisfed.org/docs/api/) (St. Louis
 
 ![Dashboard](docs/dashboard.png)
 
+*Chart refreshes automatically from live FRED data (weekly check; updates when new data arrive).*
+
 ## Research questions
 
 1. **Q1 (inference).** Does wage growth help predict core PCE inflation once energy prices, labor-market slack and inflation expectations are included? Is that relationship stable before and after 2021?
@@ -78,9 +80,10 @@ src/charts.py     Plotly figures
 notebooks/        analysis.ipynb: the full analysis, step by step
 reports/          Generated results (results.md, backtest_predictions.csv)
 tests/            pytest checks on calculations and modeling code
+scripts/          make_dashboard_image.py: regenerates docs/dashboard.png
 pytest.ini        pytest import-path config
-docs/             dashboard screenshot
-.github/          CI + monthly live-fetch smoke test
+docs/             dashboard image (auto-refreshed)
+.github/          CI + monthly smoke test + weekly image refresh
 LICENSE           MIT license
 ```
 
