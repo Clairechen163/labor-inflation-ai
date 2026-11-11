@@ -108,3 +108,36 @@ def test_run_all_and_report(tmp_path):
     for heading in ["Granger", "Phillips-curve", "Out-of-sample backtest", "Diebold-Mariano"]:
         assert heading in text
     assert "Full sample" in res["scores"]
+
+
+def test_clark_west_detects_useful_extra_predictor():
+    rng = np.random.default_rng(3)
+    x = rng.normal(0, 1, 300)
+    y = x + rng.normal(0, 0.5, 300)
+    small = np.zeros(300)                 # ignores x
+    big = 0.9 * x                         # uses it
+    stat, p = models.clark_west(y, small, big, h=1)
+    assert stat > 0 and p < 0.01
+
+
+def test_clark_west_does_not_reward_noise():
+    rng = np.random.default_rng(4)
+    y = rng.normal(0, 1, 300)
+    small = np.zeros(300)
+    big = rng.normal(0, 0.3, 300)         # extra "predictor" is pure noise
+    assert models.clark_west(y, small, big, h=1)[1] > 0.05
+
+
+def test_wage_value_added_on_planted_signal():
+    res = models.run_all(synthetic(260), horizon=6, min_train=60)
+    wv = res["wage_value"]
+    assert len(wv) >= 2 and wv["n forecasts"].dtype.kind == "i"
+    full = wv.loc["Full sample: vs same model without wages"]
+    assert full["ratio (below 1 = wages help)"] < 1      # wages were built to matter
+    assert full["Clark-West p-value"] < 0.05
+
+
+def test_horizon_robustness_shape():
+    hz = models.horizon_robustness(synthetic(200), horizons=(3, 6), min_train=60)
+    assert list(hz.index) == [3, 6]
+    assert (hz["naive RMSE"] > 0).all()

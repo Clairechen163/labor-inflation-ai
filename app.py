@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import streamlit as st
 
-from src import charts, models
+from src import charts, models, summary
 from src.analysis import derive
 from src.fetch import build_dataset
 
@@ -34,6 +34,15 @@ if not key:
 df = load(key)
 start = st.sidebar.slider("From year", int(df.index.year.min()), int(df.index.year.max()) - 1, 2019)
 view = df[df.index.year >= start]
+
+# headline numbers: each shows the latest month available for that series
+latest = summary.latest_readings(df).set_index("Measure")
+picks = ["Core PCE inflation, year over year", "CPI inflation, year over year",
+         "Average hourly earnings, year over year", "Unemployment rate"]
+for col, name in zip(st.columns(len(picks)), [p for p in picks if p in latest.index]):
+    row = latest.loc[name]
+    col.metric(name, row["Latest"], help=f"{row['Month']}; a year earlier: {row['A year earlier']}")
+    col.caption(row["Month"])
 
 tabs = st.tabs(["Inflation", "Real wages", "ADP vs BLS", "Fed policy", "Young workers / AI", "Model"])
 with tabs[0]:
@@ -85,6 +94,12 @@ with tabs[5]:
     for label, tbl in res["scores"].items():
         st.markdown(f"**{label}**")
         st.dataframe(tbl.style.format("{:.3f}", na_rep=""), width="stretch")
+    if res.get("wage_value") is not None:
+        st.markdown("#### 4. What wage growth adds")
+        st.dataframe(res["wage_value"].style.format("{:.3f}", subset=res["wage_value"].columns[1:]), width="stretch")
+        st.caption("The ridge model with wage terms against the smaller models it contains. The Clark-West "
+                   "test is built for nested models; a p-value below 0.05 means wages improve the forecasts "
+                   "by more than estimation noise alone would produce.")
     st.caption("RMSE vs naive below 1 means the model beat the benchmark. Models are refit each month "
                "using only data whose outcomes were already known (no look-ahead). The Diebold-Mariano "
                "p-value tests whether accuracy differs from the naive benchmark.")

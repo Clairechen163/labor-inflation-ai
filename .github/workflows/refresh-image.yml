@@ -1,8 +1,8 @@
-name: Refresh dashboard image
+name: Refresh data and results
 
 on:
   schedule:
-    - cron: "0 6 * * 1"     # Mondays 06:00 UTC; commits only if new data changed the image
+    - cron: "0 6 * * 1"     # Mondays 06:00 UTC; commits only if new data changed something
   workflow_dispatch:         # lets you run it by hand from the Actions tab
 
 permissions:
@@ -11,24 +11,33 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    env:
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt matplotlib
-      - name: Regenerate image from live FRED data
-        env:
-          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-        run: python -m scripts.make_dashboard_image
-      - name: Commit if changed
+      - run: pip install -r requirements.txt matplotlib nbconvert ipykernel
+      - name: Refresh results, README and image from live FRED data
+        run: python -m scripts.refresh
+      - name: Check whether the data changed anything
+        id: diff
+        run: |
+          if git diff --quiet -- README.md reports docs/dashboard.png; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No new data; nothing to commit."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Re-run the notebook
+        if: steps.diff.outputs.changed == 'true'
+        run: jupyter nbconvert --to notebook --execute --inplace notebooks/analysis.ipynb
+      - name: Commit
+        if: steps.diff.outputs.changed == 'true'
         run: |
           git config user.name "Clairechen163"
-          git config user.email "Clairechen163@users.noreply.github.com"
-          if git diff --quiet -- docs/dashboard.png; then
-            echo "No new data; image unchanged."
-          else
-            git add docs/dashboard.png
-            git commit -m "Refresh dashboard image"
-            git push
-          fi
+          git config user.email "333328521+Clairechen163@users.noreply.github.com"
+          git add README.md reports docs/dashboard.png notebooks/analysis.ipynb
+          git commit -m "Refresh data, results and dashboard image"
+          git push

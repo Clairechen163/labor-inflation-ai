@@ -7,7 +7,8 @@ Q1. Does wage growth help predict core inflation once energy prices, labor-marke
 Q2. Does adding wage growth improve *out-of-sample* forecasts of core PCE inflation
     compared with simple benchmarks?
       -> Expanding-window walk-forward backtest with an explicit embargo (no look-ahead),
-         plus a Diebold-Mariano test of forecast accuracy against a naive benchmark.
+         plus a Diebold-Mariano test of forecast accuracy against a naive benchmark and a
+         Clark-West test of the wage model against the same model without wages.
 
 Predictive relationships are not causal effects. Results describe what the data
 support, not why prices move.
@@ -33,6 +34,9 @@ AR_FEATURES = ["infl_3m", "infl_12m"]
 NO_WAGE_FEATURES = AR_FEATURES + ["energy_3m", "unrate", "infl_exp"]
 FULL_FEATURES = NO_WAGE_FEATURES + ["wage_3m", "wage_12m"]
 NAIVE = "Naive (trailing 12m inflation)"
+AR_MODEL = "Ridge: own lags"
+NO_WAGE_MODEL = "Ridge: + energy, slack, expectations"
+WAGE_MODEL = "Ridge: + wage growth"
 
 
 # --------------------------------------------------------------------------- features
@@ -55,7 +59,7 @@ def build_features(df: pd.DataFrame, horizon: int = 6) -> pd.DataFrame:
     f["wage_1m"] = _ann(d["wages"], 1)
     f["wage_3m"] = _ann(d["wages"], 3)
     f["wage_12m"] = _ann(d["wages"], 12)
-    f["energy_3m"] = d["energy_cpi"].pct_change(3) * 100
+    f["energy_3m"] = d["energy_cpi"].pct_change(3, fill_method=None) * 100
     f["unrate"] = d["unrate"]
     f["infl_exp"] = d["infl_exp"]
     f["target"] = _ann(d["core_pce"], horizon).shift(-horizon)
@@ -191,9 +195,9 @@ def default_models() -> dict:
     """name -> (feature columns, estimator factory). The naive benchmark has no estimator."""
     return {
         NAIVE: (None, None),
-        "Ridge: own lags": (AR_FEATURES, _ridge),
-        "Ridge: + energy, slack, expectations": (NO_WAGE_FEATURES, _ridge),
-        "Ridge: + wage growth": (FULL_FEATURES, _ridge),
+        AR_MODEL: (AR_FEATURES, _ridge),
+        NO_WAGE_MODEL: (NO_WAGE_FEATURES, _ridge),
+        WAGE_MODEL: (FULL_FEATURES, _ridge),
         "Gradient boosting: + wage growth": (FULL_FEATURES, _gbr),
     }
 
@@ -226,6 +230,16 @@ def walk_forward(frame: pd.DataFrame, horizon: int = 6, min_train: int = 96, mod
     return pd.DataFrame(rows, index=index)
 
 
+def _long_run_var(d: np.ndarray, h: int) -> float:
+    """Bartlett-weighted long-run variance of d using h-1 lags (h-step forecasts overlap)."""
+    n = len(d)
+    dc = d - d.mean()
+    lrv = dc @ dc / n
+    for k in range(1, h):
+        lrv += 2 * (1 - k / h) * (dc[k:] @ dc[:-k]) / n
+    return float(lrv)
+
+
 def diebold_mariano(err_model, err_bench, h: int) -> tuple[float, float]:
     """Diebold-Mariano test (squared-error loss, Bartlett-weighted long-run variance,
     Harvey-Leybourne-Newbold small-sample correction). Negative statistic = model is better."""
@@ -233,16 +247,32 @@ def diebold_mariano(err_model, err_bench, h: int) -> tuple[float, float]:
     n = len(d)
     if n <= h + 2:
         return float("nan"), float("nan")
-    dc = d - d.mean()
-    lrv = dc @ dc / n
-    for k in range(1, h):
-        lrv += 2 * (1 - k / h) * (dc[k:] @ dc[:-k]) / n
+    lrv = _long_run_var(d, h)
     if lrv <= 0:
         return float("nan"), float("nan")
     stat = d.mean() / np.sqrt(lrv / n)
     stat *= np.sqrt((n + 1 - 2 * h + h * (h - 1) / n) / n)
     p = 2 * (1 - stats.t.cdf(abs(stat), df=n - 1))
     return float(stat), float(p)
+
+
+def clark_west(actual, pred_small, pred_big, h: int) -> tuple[float, float]:
+    """Clark-West (2007) test for nested models: does the bigger model (extra predictors)
+    forecast better than the smaller one it contains?
+
+    Under the null the extra coefficients are zero, so the bigger model only adds estimation
+    noise and its squared error is inflated by (pred_small - pred_big)^2. The test removes that
+    term before comparing. One-sided: a small p-value favors the bigger model."""
+    y, a, b = (np.asarray(v, float) for v in (actual, pred_small, pred_big))
+    f = (y - a) ** 2 - ((y - b) ** 2 - (a - b) ** 2)
+    n = len(f)
+    if n <= h + 2:
+        return float("nan"), float("nan")
+    lrv = _long_run_var(f, h)
+    if lrv <= 0:
+        return float("nan"), float("nan")
+    stat = f.mean() / np.sqrt(lrv / n)
+    return float(stat), float(1 - stats.norm.cdf(stat))
 
 
 def score(preds: pd.DataFrame, horizon: int) -> pd.DataFrame:
@@ -261,13 +291,69 @@ def score(preds: pd.DataFrame, horizon: int) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("model")
 
 
-def score_periods(preds: pd.DataFrame, horizon: int) -> dict[str, pd.DataFrame]:
-    """Full sample plus 2023 onward (after the 2021-22 inflation surge dominates errors)."""
-    out = {"Full sample": score(preds, horizon)}
-    recent = preds[preds.index >= "2023-01-01"]
+RECENT_START = "2023-01-01"
+
+
+def _periods(preds: pd.DataFrame, horizon: int) -> dict[str, pd.DataFrame]:
+    """Full sample plus 2023 onward (the 2021-22 inflation surge dominates full-sample errors)."""
+    out = {"Full sample": preds}
+    recent = preds[preds.index >= RECENT_START]
     if len(recent) >= horizon + 12:
-        out["2023 onward"] = score(recent, horizon)
+        out["2023 onward"] = recent
     return out
+
+
+def score_periods(preds: pd.DataFrame, horizon: int) -> dict[str, pd.DataFrame]:
+    return {label: score(p, horizon) for label, p in _periods(preds, horizon).items()}
+
+
+def _rmse(pred: pd.Series, actual: pd.Series) -> float:
+    return float(np.sqrt(((pred - actual) ** 2).mean()))
+
+
+BASELINES = {NO_WAGE_MODEL: "same model without wages", AR_MODEL: "past inflation only"}
+
+
+def wage_value_added(preds: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    """Direct answer to Q2: the ridge model with wage growth against the smaller models it contains.
+
+    Comparing each model with the naive benchmark does not isolate what wages add. This table
+    does, with a Clark-West test (the models are nested). Two baselines are shown because the
+    answer can differ: the same model without the wage terms, and past inflation only."""
+    if WAGE_MODEL not in preds or NO_WAGE_MODEL not in preds:
+        raise KeyError("Predictions must include the ridge models with and without wage growth.")
+    rows = []
+    for label, p in _periods(preds, horizon).items():
+        big = _rmse(p[WAGE_MODEL], p["actual"])
+        for base, short in BASELINES.items():
+            if base not in p:
+                continue
+            small = _rmse(p[base], p["actual"])
+            rows.append({
+                "comparison": f"{label}: vs {short}", "n forecasts": len(p),
+                "baseline RMSE": small, "RMSE with wages": big,
+                "ratio (below 1 = wages help)": big / small,
+                "Clark-West p-value": clark_west(p["actual"], p[base], p[WAGE_MODEL], horizon)[1],
+            })
+    return pd.DataFrame(rows).set_index("comparison")
+
+
+def horizon_robustness(df: pd.DataFrame, horizons=(3, 6, 12), min_train: int = 96) -> pd.DataFrame:
+    """Repeat the backtest at several forecast horizons (naive and the ridge models only)."""
+    light = {NAIVE: (None, None), AR_MODEL: (AR_FEATURES, _ridge),
+             NO_WAGE_MODEL: (NO_WAGE_FEATURES, _ridge), WAGE_MODEL: (FULL_FEATURES, _ridge)}
+    rows = []
+    for h in horizons:
+        preds = walk_forward(build_features(df, h), h, min_train, light)
+        naive, ar, small, big = (_rmse(preds[c], preds["actual"]) for c in (NAIVE, AR_MODEL, NO_WAGE_MODEL, WAGE_MODEL))
+        rows.append({
+            "horizon (months)": h, "n forecasts": len(preds), "naive RMSE": naive,
+            "wage model vs naive": big / naive,
+            "vs same model without wages": big / small,
+            "Clark-West p-value": clark_west(preds["actual"], preds[NO_WAGE_MODEL], preds[WAGE_MODEL], h)[1],
+            "vs past inflation only": big / ar,
+        })
+    return pd.DataFrame(rows).set_index("horizon (months)")
 
 
 # --------------------------------------------------------------------------- orchestration
@@ -285,20 +371,24 @@ def run_all(df: pd.DataFrame, horizon: int = 6, min_train: int = 96, models: dic
         "regimes": regime_comparison(frame, horizon),
         "predictions": preds,
         "scores": score_periods(preds, horizon),
+        "wage_value": wage_value_added(preds, horizon) if {NO_WAGE_MODEL, WAGE_MODEL} <= set(preds.columns) else None,
+        "data_through": df.dropna(how="all").index.max().strftime("%B %Y"),
     }
 
 
 def _md(df: pd.DataFrame, digits: int = 3) -> str:
     def fmt(v):
-        return "" if pd.isna(v) else (f"{v:.{digits}f}" if isinstance(v, (float, np.floating)) else str(v))
+        if isinstance(v, (bool, np.bool_, int, np.integer, str)):
+            return str(v)
+        return "" if pd.isna(v) else f"{v:.{digits}f}"
     cols = [df.index.name or ""] + [str(c) for c in df.columns]
     lines = ["| " + " | ".join(cols) + " |", "|" + "|".join(["---"] * len(cols)) + "|"]
-    for idx, row in df.iterrows():
+    for idx, row in zip(df.index, df.itertuples(index=False, name=None)):  # keeps ints as ints
         lines.append("| " + " | ".join([str(idx)] + [fmt(v) for v in row]) + " |")
     return "\n".join(lines)
 
 
-def write_report(res: dict, path: str = "reports/results.md") -> str:
+def write_report(res: dict, path: str = "reports/results.md", horizons: pd.DataFrame | None = None) -> str:
     h = res["horizon"]
     s = res["regression_summary"]
     parts = [
@@ -307,7 +397,8 @@ def write_report(res: dict, path: str = "reports/results.md") -> str:
         "_Generated by `python -m src.models`. Predictive relationships only; nothing here is a causal claim._",
         "",
         f"Target: core PCE inflation over the next {h} months, annualized %. "
-        f"Regression sample: {s['first month']} to {s['last month']} (n={s['n']}).",
+        f"Regression sample: {s['first month']} to {s['last month']} (n={s['n']}). "
+        f"Data through {res.get('data_through', 'n/a')}.",
         "",
         "## 1. Stationarity checks (ADF)",
         _md(res["adf"]),
@@ -335,6 +426,23 @@ def write_report(res: dict, path: str = "reports/results.md") -> str:
         "whether the difference in squared errors is statistically distinguishable from zero.",
         "",
     ]
+    if res.get("wage_value") is not None:
+        parts += [
+            "## 5. What wage growth adds (ridge model with wages against the smaller models it contains)",
+            _md(res["wage_value"]),
+            "",
+            "The Clark-West test is one-sided and designed for nested models: a small p-value means the "
+            "wage terms improve forecasts beyond what estimation noise alone would produce.",
+            "",
+        ]
+    if horizons is not None:
+        parts += [
+            "## 6. Robustness across forecast horizons",
+            _md(horizons),
+            "",
+            "Ratios below 1 mean the ridge model with wage growth had the lower RMSE.",
+            "",
+        ]
     text = "\n".join(parts)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -345,8 +453,9 @@ def write_report(res: dict, path: str = "reports/results.md") -> str:
 def main() -> None:
     from src.fetch import build_dataset
 
-    res = run_all(build_dataset())
-    write_report(res, "reports/results.md")
+    df = build_dataset()
+    res = run_all(df)
+    write_report(res, "reports/results.md", horizon_robustness(df))
     res["predictions"].to_csv("reports/backtest_predictions.csv")
     print(f"Wrote reports/results.md (n={res['regression_summary']['n']} regression rows).")
 
